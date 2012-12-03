@@ -9,7 +9,6 @@ $ sigdates --min=2012 'August 12, 1981'
     2013 Apr 20, 01:46:40     1,000,000,000 seconds
 
 
-
 Use the --min and --max flags to choose what time period to look at:
 
 $ sigdates --min=2012 --max='+10 years' 1981-08-12
@@ -19,7 +18,6 @@ $ sigdates --min=2012 --max='+10 years' 1981-08-12
     2019 Aug 21, 21:20:00        20,000,000 minutes
     2019 Dec 11, 00:00:00             2,000 weeks
     2021 Aug 12, 00:00:00                40 years
-
 
 
 Use the --sigdigs flag to be more or less picky about date importance:
@@ -33,6 +31,13 @@ $ sigdates --min=2012-01-13 --max='+2 week' --sigdigs 3 1981-08-12
                                 960,000,000 seconds
     2012 Jan 24, 15:26:40       961,000,000 seconds
     2012 Jan 26, 23:00:00           267,000 hours
+
+
+For extra hipster points, use binary intervals:
+
+$ sigdates --min=2012 --base 2 1981-08-12
+    2013 Jul  5, 20:16:00              2^24 minutes
+    2013 Aug 12, 00:00:00              2^ 5 years
 
 
 Use the --help option for more information.
