@@ -38,8 +38,5 @@ $ sigdates --min=2012-01-13 --max='+2 week' --sigdigs 3 1981-08-12
 Use the --help option for more information.
 
 
-TODO: Binary multiples
-
-
 (C) 2006-2012 Dave Vasilevsky <dave@vasilevsky.ca>
 Licensing: Simplified BSD License, see LICENSE file
