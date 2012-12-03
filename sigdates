@@ -15,28 +15,40 @@ Usage: sigdates [--min=DATE] [--max=DATE] [--sigdigs=NUM] [START]
 
 Find 'significant dates' following the START date.
 
-Example:
-
-  $ sigdates 'sept 11, 2001' 
-	  2006 Mar  7, 02:41:00               730 months
-	  2006 Mar 10, 08:01:00        32,000,000 minutes
-	  2006 May  7, 02:41:00                61 years
-	  2006 Sep  4, 02:41:00             3,200 weeks
-	  2006 Dec 13, 02:41:00           540,000 hours
+  $ sigdates --min=2002 'August 12, 1981'
+     2003 Jul  8, 00:00:00             8,000 days
+     2003 Oct 17, 20:26:40       700,000,000 seconds
 
 The default start is today. Dates will only be found between the given minimum 
 and maximum dates. All dates can be passed in almost any reasonable format.
-If a date starts with + or -, it will be taken as a delta to the current date.
+If a date starts with + or -, it will be taken as a delta.
 
-One can also specify the number of significant digits, anything from 0 to 3
-is sensible. For example, -s0 will look for dates like '100 weeks', '10 days'
-while -s2 will also look for '450 weeks' and '23 days'.
+Options:
+
+  --min=DATE, -n DATE    Beginning of time period to look for dates.
+                         Default: today
+
+  --max=DATE, -x DATE    End of time period. If a delta, relative to min.
+                         Default: min +2 years
+
+  --sigdigs=NUM, -s NUM  Number of significant digits to look for. Eg, -s0
+                         will find dates like '10 days', '100 weeks', while
+                         -s2 will also find '450 weeks' and '23 days'.
+                         Default: 1
+
+  --base=NUM, -b NUM     Base to use for determining significant numbers.
+                         Default: 10
+
+  --scientific, -e       Display numbers using scientific notation.
+                         Default: off if base is 10, on otherwise
 
 USAGE
 
 my $start = "today";
 my $min;
 my $max;
+my $base = 10;
+my $sci;
 my $sigdigs = 1;
 my $help = 0;
 my $debug = 0;
@@ -46,12 +58,15 @@ my $nerr = GetOptions(
 	'min|n=s'		=> \$min,
 	'max|x=s'		=> \$max,
 	'sigdigs|s=i'	=> \$sigdigs,
+	'base|b=i'		=> \$base,
+	'scientific|e!'	=> \$sci,
 	'help|h'		=> \$help,
 	'debug|d'		=> \$debug,
 );
 $start = shift if @ARGV;
 $min = 'today' unless defined $min;
 $max = '+2 years' unless defined $max;
+$sci = ($base == 10 ? 0 : 1) unless defined $sci;
 
 if (!$nerr or $help or @ARGV) {
 	print $usage;
@@ -72,14 +87,16 @@ sub my_date {
 
 my ($mind, $startd) = map { my_date($_) } ($min, $start);
 my $maxd = my_date($max, $mind);
-my @multiples = powers(sigdigs => $sigdigs);
+my @multiples = powers(sigdigs => $sigdigs, base => $base);
 my @units = qw(years months weeks days hours minutes seconds);
 
 ## Generate powers of ten, with appropriate prefices
 sub powers {
-	my %opts = (sigdigs => 0, maxexp => 10, @_);
-	my $base = 10;
-	my @exponents = (0..$opts{maxexp});
+	my %opts = (sigdigs => 0, @_);
+	my $base = $opts{base};
+	my $maxe = $opts{maxexp} || (log(1e11) / log($base));
+	
+	my @exponents = (0..$maxe);
 	my @mults = (1..($base ** $opts{sigdigs}));
 	
 	my @vals = map { $base ** $_ } @exponents;
@@ -126,9 +143,21 @@ for my $unit (@units) {
 
 ## Print 'em
 sub format_num { # Add some nice commas?
-	my $n = shift;
-	while ($n =~ s/(\d)(\d{3})(\D|$)/$1,$2$3/) { }
-	return $n;
+	my ($n, $base, $sci) = @_;
+	if ($sci) {
+		my $pow = log($n) / log($base);
+		my $p = int($pow);
+		my $m = int(sprintf "%d", $base ** ($pow - $p));
+		my $fmt = "%d^%2d";
+		if ($m == 1) {
+			return sprintf $fmt, $base, $p;
+		} else {
+			return sprintf "%d x $fmt", $m, $base, $p;
+		}
+	} else {
+		while ($n =~ s/(\d)(\d{3})(\D|$)/$1,$2$3/) { }
+		return $n;
+	}
 }
 
 @dates = sort { Date_Cmp($a->{date}, $b->{date}) } @dates;
@@ -139,6 +168,7 @@ for my $date (@dates) {
 		$datestr = ""; # duplicate
 	}
 	
-	printf "%25s %17s %s\n", $datestr, format_num($date->{mult}), $date->{unit};
+	printf "%25s %17s %s\n", $datestr, format_num($date->{mult}, $base, $sci),
+		$date->{unit};
 	$last_date = $date->{date};
 }
