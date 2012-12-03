@@ -1,0 +1,144 @@
+#!/usr/bin/perl
+# (C) 2006-2012 Dave Vasilevsky <dave@vasilevsky.ca>
+# Licensing: Simplified BSD License, see LICENSE file
+use warnings;
+use strict;
+
+use Date::Manip;
+use Getopt::Long;
+
+## CMDLINE
+my $usage = <<'USAGE';
+Usage: sigdates [--min=DATE] [--max=DATE] [--sigdigs=NUM] [START]
+       sigdates [-n    DATE] [-x    DATE] [-s        NUM] [START]
+       sigdates --help
+
+Find 'significant dates' following the START date.
+
+Example:
+
+  $ sigdates 'sept 11, 2001' 
+	  2006 Mar  7, 02:41:00               730 months
+	  2006 Mar 10, 08:01:00        32,000,000 minutes
+	  2006 May  7, 02:41:00                61 years
+	  2006 Sep  4, 02:41:00             3,200 weeks
+	  2006 Dec 13, 02:41:00           540,000 hours
+
+The default start is today. Dates will only be found between the given minimum 
+and maximum dates. All dates can be passed in almost any reasonable format.
+If a date starts with + or -, it will be taken as a delta to the current date.
+
+One can also specify the number of significant digits, anything from 0 to 3
+is sensible. For example, -s0 will look for dates like '100 weeks', '10 days'
+while -s2 will also look for '450 weeks' and '23 days'.
+
+USAGE
+
+my $start = "today";
+my $min;
+my $max;
+my $sigdigs = 1;
+my $help = 0;
+my $debug = 0;
+
+Getopt::Long::Configure(qw(bundling));
+my $nerr = GetOptions(
+	'min|n=s'		=> \$min,
+	'max|x=s'		=> \$max,
+	'sigdigs|s=i'	=> \$sigdigs,
+	'help|h'		=> \$help,
+	'debug|d'		=> \$debug,
+);
+$start = shift if @ARGV;
+$min = 'today' unless defined $min;
+$max = '+2 years' unless defined $max;
+
+if (!$nerr or $help or @ARGV) {
+	print $usage;
+	exit 1;
+}
+
+
+## Setup
+sub my_date {
+	my $spec = shift;
+	my $rel = shift || 'today';
+	if ($spec =~ /^[-+]/) {
+		return DateCalc($rel, $spec);
+	} else {
+		return ParseDateString($spec);
+	}
+}
+
+my ($mind, $startd) = map { my_date($_) } ($min, $start);
+my $maxd = my_date($max, $mind);
+my @multiples = powers(sigdigs => $sigdigs);
+my @units = qw(years months weeks days hours minutes seconds);
+
+## Generate powers of ten, with appropriate prefices
+sub powers {
+	my %opts = (sigdigs => 0, maxexp => 10, @_);
+	my $base = 10;
+	my @exponents = (0..$opts{maxexp});
+	my @mults = (1..($base ** $opts{sigdigs}));
+	
+	my @vals = map { $base ** $_ } @exponents;
+	@vals = map { my $v = $_; map { $_ * $v } @mults } @vals;
+	my %vals = map { $_ => 1 } @vals;
+	@vals = sort { $a <=> $b } keys %vals; # remove dups
+	return (0, @vals);
+}
+
+
+## Some useful stuff for limiting bad multiples
+sub delta_sec {	# Seconds in a delta
+	Delta_Format(shift, 0, '%st'); 
+}
+sub unit_sec {	# Seconds in a unit
+	delta_sec(DateCalc($startd, DateCalc($startd, "+1 ".shift)));
+}
+my $min_sec = delta_sec(DateCalc($startd, $mind));	# Seconds to min,
+my $max_sec = delta_sec(DateCalc($startd, $maxd));	# max.
+
+sub unit_filt {	# For the given unit, return only reasonable values of the
+	my ($unit, @mults) = @_;	# given multiples.
+	my $margin = 1.3;
+	my $usec = unit_sec($unit);
+	my $maxu = $max_sec / $usec * $margin;
+	my $minu = $min_sec / $usec / $margin;
+	grep { $_ >= $minu && $_ <= $maxu } @mults;
+}
+
+
+## Find all the applicable dates
+my @dates;
+for my $unit (@units) {
+	for my $mult (unit_filt($unit, @multiples)) {
+		print "Calculating $mult $unit\n" if $debug;
+		eval {
+			my $date = DateCalc($startd, "+ $mult $unit");
+			if (Date_Cmp($date, $mind) >= 0 && Date_Cmp($date, $maxd) <= 0) {
+				push @dates, { date => $date, mult => $mult, unit => $unit };
+			}
+		};
+	}
+}
+
+## Print 'em
+sub format_num { # Add some nice commas?
+	my $n = shift;
+	while ($n =~ s/(\d)(\d{3})(\D|$)/$1,$2$3/) { }
+	return $n;
+}
+
+@dates = sort { Date_Cmp($a->{date}, $b->{date}) } @dates;
+my $last_date;
+for my $date (@dates) {
+	my $datestr = UnixDate($date->{date}, "%Y %h %e, %T");
+	if (defined $last_date && Date_Cmp($last_date, $date->{date}) == 0) {
+		$datestr = ""; # duplicate
+	}
+	
+	printf "%25s %17s %s\n", $datestr, format_num($date->{mult}), $date->{unit};
+	$last_date = $date->{date};
+}
