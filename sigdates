@@ -147,7 +147,7 @@ sub format_num { # Add some nice commas?
 	if ($sci) {
 		my $pow = log($n) / log($base);
 		my $p = int($pow);
-		my $m = int(sprintf "%d", $base ** ($pow - $p));
+		my $m = $n / ($base ** $p);
 		my $fmt = "%d^%2d";
 		if ($m == 1) {
 			return sprintf $fmt, $base, $p;
