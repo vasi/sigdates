@@ -143,17 +143,18 @@ for my $unit (@units) {
 
 ## Print 'em
 sub format_num { # Add some nice commas?
-	my ($n, $base, $sci) = @_;
+	my ($n, $base, $sci, $sigdigs) = @_;
 	if ($sci) {
-		my $pow = log($n) / log($base);
-		my $p = int($pow);
+		my $p = int(log($n + 0.1) / log($base)); # add a bit to deal with floating point error
 		my $m = $n / ($base ** $p);
-		my $fmt = "%d^%2d";
-		if ($m == 1) {
-			return sprintf $fmt, $base, $p;
-		} else {
-			return sprintf "%d x $fmt", $m, $base, $p;
+		
+		my $pref = '';
+		if ($sigdigs == 1) {
+			$pref = sprintf '%2d x ', $m;
+		} elsif ($sigdigs > 1) {
+			$pref = sprintf '%.*f x ', ($sigdigs - 1), $m;
 		}
+		return sprintf '%s%d^%2d', $pref, $base, $p;
 	} else {
 		while ($n =~ s/(\d)(\d{3})(\D|$)/$1,$2$3/) { }
 		return $n;
@@ -168,7 +169,7 @@ for my $date (@dates) {
 		$datestr = ""; # duplicate
 	}
 	
-	printf "%25s %17s %s\n", $datestr, format_num($date->{mult}, $base, $sci),
+	printf "%25s %17s %s\n", $datestr, format_num($date->{mult}, $base, $sci, $sigdigs),
 		$date->{unit};
 	$last_date = $date->{date};
 }
